@@ -151,18 +151,18 @@ public class Croupier {
         }
     }
 
-    private static void sendMessage(String name, ClientType type, String message) {
+    public static void sendMessage(String name, ClientType type, String message) {
         ClientInfo client;
         client = type == ClientType.PLAYER ? players.get(name) : counters.get(name);
         sendMessage(client, message);
     }
 
-    private static void sendMessage(String ip, int port, String message) {
+    public static void sendMessage(String ip, int port, String message) {
         ClientInfo client = new ClientInfo(ip, port);
         sendMessage(client, message);
     }
 
-    private static void sendMessage(ClientInfo client, String message) {
+    public static void sendMessage(ClientInfo client, String message) {
         try (DatagramSocket s = new DatagramSocket()) { // closes automatically
             InetAddress ip = InetAddress.getByName(client.ip);
             byte[] buffer = message.getBytes(StandardCharsets.UTF_8);
