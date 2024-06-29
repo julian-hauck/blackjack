@@ -34,18 +34,20 @@ public class Player {
             }
         }
 
-        private void split(String card, int deck) {
-            if (!player.split) {
-                player.hand2
-            }
-        }
+        private void hit(String card, int deck) {
+            if (!checkAction(Action.HIT, card, deck)) return;
+            cards.add(cardStack.pop());
     }
 
     public synchronized void split(String card, int deck) {
-        if (!player.split) {
-            player.hand2
+        String message;
+        if (!split && hand1.cards.size() == 2) {
+            hand2.cards.add(hand1.cards.pop());
+            message = "action accepted";
+        } else {
+            message = "action declined Split nicht moeglich";
         }
-
+        Croupier.sendMessage(ip, port, message);
     }
 
 
