@@ -90,13 +90,14 @@ public class Croupier {
                 s.receive(p);
                 line = new String(buffer, 0, p.getLength(), StandardCharsets.UTF_8);
                 String[] parts = line.split(" ");
+                System.out.println(line);
                 if (line.startsWith("register")) {
                     String name = parts[3];
                     String ip = parts[1];
                     int port = Integer.parseInt(parts[2]);
                     String message = "registration successful";
                     if (parts[0].equals("registerPlayer")) {
-                        if (players.containsKey("name")) {
+                        if (players.containsKey(name)) {
                             Player c = players.get(name);
                             if (ip.equals(c.ip) && port == c.port) {
                                 sendMessage(ip, port, message);  // Wiederholung der Bestaetigung
@@ -107,7 +108,7 @@ public class Croupier {
                         } else if (state != State.REGISTER) {
                             message = "registration declined Spiel hat bereits begonnen";
                             sendMessage(ip, port, message);
-                        } else if (players.size() < maxPlayers) {
+                        } else if (players.size() >= maxPlayers) {
                             message = "registration declined maximale Spieleranzahl erreicht";
                             sendMessage(ip, port, message);
                         } else {
@@ -149,7 +150,7 @@ public class Croupier {
                     Player pl = players.get(parts[1]);
                     pl.split(parts[2], Integer.parseInt(parts[3]));
                 }
-                System.out.println(line);
+                //System.out.println(line);
             } while (!line.equalsIgnoreCase("quit"));
         } catch (IOException e) {
             System.err.println("Unable to receive message on ownPort \"" + ownPort + "\".");
@@ -172,7 +173,7 @@ public class Croupier {
             byte[] buffer = message.getBytes(StandardCharsets.UTF_8);
             DatagramPacket p = new DatagramPacket(buffer, buffer.length, ip, client.port);
             s.send(p);
-            //System.out.println("Message sent.");
+            System.out.println("Message sent:" + message);
         } catch (IOException e) {
             System.err.println("Unable to send message to \"" + " " + client.ip + " " + client.port + "\".");
         }
