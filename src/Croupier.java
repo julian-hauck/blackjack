@@ -70,6 +70,7 @@ public class Croupier {
             while (!(input = br.readLine()).equalsIgnoreCase("quit")) {
                 sendCard(stack.pop("Croupier"));
                 for (Player p : players.values()) {
+                    System.out.println(p.getName());
                     p.init();
                 }
             }

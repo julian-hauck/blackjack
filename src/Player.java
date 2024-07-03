@@ -25,6 +25,7 @@ public class Player {
         private Hand (Player player, int bet) {
             this.player = player;
             this.bet = bet;
+            this.cards = new LinkedList<>();
         }
 
         private boolean checkAction(Action action, String card, int deck) {
@@ -90,10 +91,18 @@ public class Player {
         this.ip = ip;
         this.port = port;
         this.cardStack = cardStack;
+        this.name = name;
     }
 
     public void init() {
         hand1 = new Hand(this, bet);
+        for (int i = 0; i< 2; i++) {
+            Card newCard = cardStack.pop(name);
+            hand1.cards.add(newCard);
+            if (newCard.getValue() == Card.Value.ASS) hand1.containsAce = true;
+            new Thread(() -> Croupier.sendCard(newCard)).start();
+        }
+
     }
 
     public synchronized void split(String card, int deck) {
@@ -198,6 +207,10 @@ public class Player {
 
     public String getIp() {
         return ip;
+    }
+
+    public String getName() {
+        return this.name;
     }
 
 }
