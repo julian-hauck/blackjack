@@ -69,6 +69,9 @@ public class Croupier {
             String input;
             while (!(input = br.readLine()).equalsIgnoreCase("quit")) {
                 sendCard(stack.pop("Croupier"));
+                for (Player p : players.values()) {
+                    p.init();
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
