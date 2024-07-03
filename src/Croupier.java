@@ -3,9 +3,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Croupier {
 
@@ -15,10 +14,13 @@ public class Croupier {
     private enum ClientType {PLAYER, COUNTER};
     private enum State {REGISTER, BET, CARDS, PRIZE, WAIT}
     private static State state = State.REGISTER;
-    private static final Map<String, ClientInfo> players = new HashMap<>();
+    private static final Map<String, Player> players = new HashMap<>();
     private static final Map<String, ClientInfo> counters = new HashMap<>();
+    private static final Map<String, Set<ClientInfo>> unacknowledged = Collections.synchronizedMap(new HashMap<>());
+    static CardStack stack = new CardStack(7);
 
-    private record ClientInfo(String ip, int port) { }
+    private record ClientInfo(String ip, int port) { };
+    private record toAcknowledge(ClientType type, String name, String card) {};
 
     private static void fatal(String input) {
         System.err.println(input);
@@ -66,22 +68,7 @@ public class Croupier {
         try(BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) { // closes automatically
             String input;
             while (!(input = br.readLine()).equalsIgnoreCase("quit")) {
-                String[] parts = input.split(" ");
-                if (parts[0].equalsIgnoreCase("register") && parts.length == 3 && isPort(parts[2])) {
-                    register(parts[1], Integer.parseInt(parts[2]));
-                } else if (parts[0].equalsIgnoreCase("send")) {
-                    String receiver = parts[1];
-                    ClientInfo receiverInfo = players.get(receiver);
-                    if (receiverInfo != null) {
-                        String message = input.substring(input.indexOf(receiver) + receiver.length()).trim();
-                        sendLines(receiverInfo.ip, receiverInfo.port, message);
-                        System.out.println("Sent \"" + message + "\" to " + receiver + ".");
-                    } else {
-                        System.err.println("Unknown client \"" + receiver + "\".");
-                    }
-                } else {
-                    System.err.println("Unknown command.");
-                }
+                sendCard(stack.pop("Croupier"));
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -99,15 +86,15 @@ public class Croupier {
                 DatagramPacket p = new DatagramPacket(buffer, buffer.length);
                 s.receive(p);
                 line = new String(buffer, 0, p.getLength(), StandardCharsets.UTF_8);
+                String[] parts = line.split(" ");
                 if (line.startsWith("register")) {
-                    String[] parts = line.split(" ");
                     String name = parts[3];
                     String ip = parts[1];
                     int port = Integer.parseInt(parts[2]);
                     String message = "registration successful";
                     if (parts[0].equals("registerPlayer")) {
                         if (players.containsKey("name")) {
-                            ClientInfo c = players.get(name);
+                            Player c = players.get(name);
                             if (ip.equals(c.ip) && port == c.port) {
                                 sendMessage(ip, port, message);  // Wiederholung der Bestaetigung
                             } else {
@@ -121,8 +108,8 @@ public class Croupier {
                             message = "registration declined maximale Spieleranzahl erreicht";
                             sendMessage(ip, port, message);
                         } else {
-                            players.put(name, new ClientInfo(ip, port));
-                            sendMessage(name, ClientType.PLAYER, message);
+                            players.put(name, new Player(ip, port, name, stack));
+                            sendMessage(ip, port, message);
                             System.out.println("Spieler " + name + " registriert");
                         }
                     } else if (parts[0].equals("registerCounter")) {
@@ -139,10 +126,25 @@ public class Croupier {
                             sendMessage(ip, port, message);
                         } else {
                             counters.put(name, new ClientInfo(ip, port));
-                            sendMessage(name, ClientType.COUNTER, message);
+                            sendMessage(ip, port, message);
                             System.out.println("Spieler " + name + " registriert");
                         }
                     }
+                } else if (line.startsWith("hit")) {
+                    Player pl = players.get(parts[1]);
+                    pl.hit(parts[2], Integer.parseInt(parts[3]));
+                } else if (line.startsWith("stand")) {
+                    Player pl = players.get(parts[1]);
+                    pl.stand(parts[2], Integer.parseInt(parts[3]));
+                } else if (line.startsWith("doubleDown")) {
+                    Player pl = players.get(parts[1]);
+                    pl.doubleDown(parts[2], Integer.parseInt(parts[3]));
+                } else if (line.startsWith("surrender")) {
+                    Player pl = players.get(parts[1]);
+                    pl.surrender(parts[2], Integer.parseInt(parts[3]));
+                } else if (line.startsWith("split")) {
+                    Player pl = players.get(parts[1]);
+                    pl.split(parts[2], Integer.parseInt(parts[3]));
                 }
                 System.out.println(line);
             } while (!line.equalsIgnoreCase("quit"));
@@ -151,14 +153,13 @@ public class Croupier {
         }
     }
 
-    public static void sendMessage(String name, ClientType type, String message) {
-        ClientInfo client;
-        client = type == ClientType.PLAYER ? players.get(name) : counters.get(name);
+    public static void sendMessage(String ip, int port, String message) {
+        ClientInfo client = new ClientInfo(ip, port);
         sendMessage(client, message);
     }
 
-    public static void sendMessage(String ip, int port, String message) {
-        ClientInfo client = new ClientInfo(ip, port);
+    public static void sendMessage(Player player, String message) {
+        ClientInfo client = new ClientInfo(player.getIp(), player.getPort());
         sendMessage(client, message);
     }
 
@@ -171,6 +172,33 @@ public class Croupier {
             //System.out.println("Message sent.");
         } catch (IOException e) {
             System.err.println("Unable to send message to \"" + " " + client.ip + " " + client.port + "\".");
+        }
+    }
+
+    public static void sendCard(Card card) {
+        try {
+            String serializedCard = card.toJSON();
+            for (Player p : players.values()) {
+                sendMessage(p.getIp(), p.getPort(), serializedCard);
+            }
+            //TODO remove clients
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void checkTerminated() {
+        boolean terminated = true;
+        for (Player p : players.values()) {
+            if (!p.getTerminated()) {
+                terminated = false;
+            }
+        }
+        if (terminated) {
+            for (Player p : players.values()) {
+                p.giveWin(21);
+            }
         }
     }
 }

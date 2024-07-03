@@ -31,8 +31,9 @@ public class CardStack {
         Collections.shuffle(cards);
     }
 
-    public synchronized Card pop() {
+    public synchronized Card pop(String owner) {
         Card card = cards.pop();
+        card.setOwner("owner");
         if (cards.size() <= cut) initCards();
         return card;
     }

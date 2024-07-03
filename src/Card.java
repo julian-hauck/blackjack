@@ -124,4 +124,8 @@ public class Card {
     public static Card fromJSON(String json) throws IOException {
         return serializer.readValue(json, Card.class);
     }
+
+    public String getId() {
+        return deck + " " + toString;
+    }
 }
