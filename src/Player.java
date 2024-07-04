@@ -6,8 +6,8 @@ public class Player implements Client {
     private String lastCard;
     private int lastDeck;
     private String name;
-    public String ip;
-    public int port;
+    private String ip;
+    private int port;
     private CardStack cardStack;
     private boolean split;
     private Hand hand1;
@@ -140,7 +140,7 @@ public class Player implements Client {
         //ToDo repeatition
     }
 
-    private void action(Action action, String card, int deck) {
+    public void action(Action action, String card, int deck) {
         if (action == lastAction && card.equals(lastCard) && deck == lastDeck) {
             accept(action, card, deck);
         } else if (getTerminated()) {

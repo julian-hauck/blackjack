@@ -11,15 +11,12 @@ public class Croupier {
     private static int port;
     private static int maxPlayers = 6;
     private enum ClientType {PLAYER, COUNTER};
-    private enum State {REGISTER, BET, CARDS, PRIZE, WAIT}
+    private enum State {REGISTER, BET, PLAYING, PRIZE, WAIT}
     private static State state = State.REGISTER;
     private static final Map<String, Player> players = new HashMap<>();
-    private static final Map<String, ClientInfo> counters = new HashMap<>();
-    private static final Map<String, Set<ClientInfo>> unacknowledged = Collections.synchronizedMap(new HashMap<>());
+    private static final Map<String, Counter> counters = new HashMap<>();
+    private static final Map<String, Map<String, Client>> unacknowledged = Collections.synchronizedMap(new HashMap<>());
     static CardStack stack = new CardStack(7);
-
-    private record ClientInfo(String ip, int port) { };
-    private record toAcknowledge(ClientType type, String name, String card) {};
 
     private static void fatal(String input) {
         System.err.println(input);
@@ -99,7 +96,7 @@ public class Croupier {
                     if (parts[0].equals("registerPlayer")) {
                         if (players.containsKey(name)) {
                             Player c = players.get(name);
-                            if (ip.equals(c.ip) && port == c.port) {
+                            if (ip.equals(c.getIp()) && port == c.getPort()) {
                                 sendMessage(ip, port, message);  // Wiederholung der Bestaetigung
                             } else {
                                 message = "registration declined Name bereits vergeben";
@@ -118,8 +115,8 @@ public class Croupier {
                         }
                     } else if (parts[0].equals("registerCounter")) {
                         if (counters.containsKey("name")) {
-                            ClientInfo c = counters.get(name);
-                            if (ip.equals(c.ip) && port == c.port) {
+                            Counter c = counters.get(name);
+                            if (ip.equals(c.getIp()) && port == c.getPort()) {
                                 sendMessage(ip, port, message); // Wiederholung der Bestaetigung
                             } else {
                                 message = "registration declined Spieler hat bereits einen Kartenzähler";
@@ -129,26 +126,26 @@ public class Croupier {
                             message = "registration declined Spieler unbekannt";
                             sendMessage(ip, port, message);
                         } else {
-                            counters.put(name, new ClientInfo(ip, port));
+                            counters.put(name, new Counter(ip, port, name));
                             sendMessage(ip, port, message);
                             System.out.println("Spieler " + name + " registriert");
                         }
                     }
-                } else if (line.startsWith("hit")) {
+                } else if (state != State.REGISTER) {
                     Player pl = players.get(parts[1]);
-                    pl.hit(parts[2], Integer.parseInt(parts[3]));
-                } else if (line.startsWith("stand")) {
-                    Player pl = players.get(parts[1]);
-                    pl.stand(parts[2], Integer.parseInt(parts[3]));
-                } else if (line.startsWith("doubleDown")) {
-                    Player pl = players.get(parts[1]);
-                    pl.doubleDown(parts[2], Integer.parseInt(parts[3]));
-                } else if (line.startsWith("surrender")) {
-                    Player pl = players.get(parts[1]);
-                    pl.surrender(parts[2], Integer.parseInt(parts[3]));
-                } else if (line.startsWith("split")) {
-                    Player pl = players.get(parts[1]);
-                    pl.split(parts[2], Integer.parseInt(parts[3]));
+                    if (pl == null) {
+                        System.out.println("Nachricht von unbekanntem Client erhalten.");
+                    } else if (line.startsWith("hit")) {
+                        pl.action(Player.Action.HIT, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
+                    } else if (line.startsWith("stand")) {
+                        pl.action(Player.Action.STAND, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
+                    } else if (line.startsWith("doubleDown")) {
+                        pl.action(Player.Action.DOUBLE, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
+                    } else if (line.startsWith("surrender")) {
+                        pl.action(Player.Action.SURRENDER, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
+                    } else if (line.startsWith("split")) {
+                        pl.action(Player.Action.SPLIT, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
+                    }
                 }
                 //System.out.println(line);
             } while (!line.equalsIgnoreCase("quit"));
@@ -157,25 +154,15 @@ public class Croupier {
         }
     }
 
-    public static void sendMessage(String ip, int port, String message) {
-        ClientInfo client = new ClientInfo(ip, port);
-        sendMessage(client, message);
-    }
-
-    public static void sendMessage(Player player, String message) {
-        ClientInfo client = new ClientInfo(player.getIp(), player.getPort());
-        sendMessage(client, message);
-    }
-
-    public static void sendMessage(ClientInfo client, String message) {
+    public static void sendMessage(String ipStr, int port, String message) {
         try (DatagramSocket s = new DatagramSocket()) { // closes automatically
-            InetAddress ip = InetAddress.getByName(client.ip);
+            InetAddress ip = InetAddress.getByName(ipStr);
             byte[] buffer = message.getBytes(StandardCharsets.UTF_8);
-            DatagramPacket p = new DatagramPacket(buffer, buffer.length, ip, client.port);
+            DatagramPacket p = new DatagramPacket(buffer, buffer.length, ip, port);
             s.send(p);
             System.out.println("Message sent:" + message);
         } catch (IOException e) {
-            System.err.println("Unable to send message to \"" + " " + client.ip + " " + client.port + "\".");
+            System.err.println("Unable to send message to \"" + " " + ipStr + " " + port + "\".");
         }
     }
 
