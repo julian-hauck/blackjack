@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit;
 
 public class Croupier {
 
-    private static int myValue;
     private static int port;
     private static int maxPlayers = 6;
     private static int maxBet = 5000;
@@ -21,6 +20,7 @@ public class Croupier {
     private static final Map<String, Map<String, Client>> unacknowledged = Collections.synchronizedMap(new HashMap<>());
     private static final Map<String, Boolean> unacknowledgedWin = Collections.synchronizedMap(new HashMap<>());
     private static int decks = 10;
+    private static LinkedList<Card> cards = new LinkedList<>();
     static CardStack stack = new CardStack(decks);
 
     private static void fatal(String input) {
@@ -69,7 +69,9 @@ public class Croupier {
         try(BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) { // closes automatically
             String input;
             while (!(input = br.readLine()).equalsIgnoreCase("quit")) {
-                sendCard(stack.pop("Croupier"));
+                Card card = stack.pop("Croupier");
+                cards.add(card);
+                sendCard(card);
                 for (Player p : players.values()) {
                     System.out.println(p.getName());
                     p.init();
@@ -205,7 +207,7 @@ public class Croupier {
         sendMessage(client.getIp(), client.getPort(), message);
     }
 
-    public static void sendWin(Player p) {
+    public static void sendWin(Player p, int myValue) {
         try {
             unacknowledgedWin.put(p.getName(), false);
             int counter = 0;
@@ -258,8 +260,37 @@ public class Croupier {
             }
         }
         if (terminated) {
+            state = State.PRIZE;
+            int myValue = cards.peek().getValueNumber();
+            Card card2 = stack.pop("Croupier");
+            if (myValue == 11 && card2.getValueNumber() != 1) {
+                myValue += card2.getValueNumber();
+            } else {
+                myValue += 11;
+            }
+            sendCard(card2);
+            if (myValue < 17) {
+                Card card3 = stack.pop("Croupier");
+                if (card3.getValueNumber() == 1) {
+                    myValue += 11;
+                } else {
+                    myValue += card3.getValueNumber();
+                }
+                sendCard(card3);
+            }
             for (Player p : players.values()) {
-                p.giveWin(21);
+                sendWin(p, myValue);
+            }
+            System.out.println("Spiel beendet. Starte neue Runde.");
+            for (Counter c : counters.values()) {
+                sendMessage(c, "getStats");
+            }
+            cards = new LinkedList<>();
+            Card card = stack.pop("Croupier");
+            cards.add(card);
+            sendCard(card);
+            for (Player p : players.values()) {
+                p.init();
             }
         }
     }

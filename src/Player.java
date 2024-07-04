@@ -92,6 +92,7 @@ public class Player implements Client {
         hand1 = new Hand(this, bet);
         hand1.addCard();
         hand1.addCard();
+        split = false;
     }
 
     public synchronized void split(String card, int deck) {
