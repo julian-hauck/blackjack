@@ -51,6 +51,8 @@ public class Player implements Client {
                 player.decline("wegen verdoppelten Einsatzes nicht moeglich");
             }
             addCard();
+            if (getValue() > 21) terminated = true;
+            Croupier.checkTerminated();
             player.accept(Action.HIT, card, deck);
         }
 

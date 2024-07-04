@@ -14,6 +14,10 @@ public class Card {
     private String toString;
     private static final ObjectMapper serializer = new ObjectMapper();
 
+    public Card() {
+
+    }
+
     public Card (Color color, Value value, int deck) {
         this.color = color;
         this.value = value;
@@ -125,7 +129,4 @@ public class Card {
         return serializer.readValue(json, Card.class);
     }
 
-    public String getId() {
-        return deck + " " + toString;
-    }
 }

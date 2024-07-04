@@ -12,7 +12,6 @@ public class Croupier {
     private static int maxPlayers = 6;
     private static int maxBet = 5000;
     private static int minBet = 1;
-    private enum ClientType {PLAYER, COUNTER};
     private enum State {REGISTER, BET, PLAYING, PRIZE, WAIT}
     private static State state = State.REGISTER;
     private static final Map<String, Player> players = new HashMap<>();
@@ -183,6 +182,15 @@ public class Croupier {
                     } else if (line.startsWith("split")) {
                         pl.action(Player.Action.SPLIT, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
                     }
+                } else {
+                    try {
+                        Stats stats = Stats.fromJSON(line);
+                        if (stats.victories > 5 && stats.victories > stats.games * 2) {
+                            remove(stats.name, "zu viele Siege");
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
                 System.out.println("received: " + line);
             } while (!line.equalsIgnoreCase("quit"));
@@ -216,7 +224,7 @@ public class Croupier {
                 TimeUnit.SECONDS.sleep(2);
                 counter++;
             }
-            //TODO remove clients
+            remove(p.getName(), "keine Reaktion");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -235,7 +243,9 @@ public class Croupier {
                 TimeUnit.SECONDS.sleep(2);
                 counter++;
             }
-            //TODO remove clients
+            for (Client c : receivers.values()) {
+                remove(c.getName(), "keine Reaktion");
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -250,6 +260,14 @@ public class Croupier {
             clients.put("counter " + c.getName(), c);
         }
         return clients;
+    }
+
+    public static void remove(String name, String message) {
+        if (!players.containsKey(name)) return;
+        sendMessage(players.get(name), "gameover " + message);
+        players.remove(name);
+        if (!counters.containsKey(name)) return;
+        counters.remove(name);
     }
 
     public static void checkTerminated() {
