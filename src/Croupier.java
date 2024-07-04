@@ -8,15 +8,20 @@ import java.util.concurrent.TimeUnit;
 
 public class Croupier {
 
+    private static int myValue;
     private static int port;
     private static int maxPlayers = 6;
+    private static int maxBet = 5000;
+    private static int minBet = 1;
     private enum ClientType {PLAYER, COUNTER};
     private enum State {REGISTER, BET, PLAYING, PRIZE, WAIT}
     private static State state = State.REGISTER;
     private static final Map<String, Player> players = new HashMap<>();
     private static final Map<String, Counter> counters = new HashMap<>();
     private static final Map<String, Map<String, Client>> unacknowledged = Collections.synchronizedMap(new HashMap<>());
-    static CardStack stack = new CardStack(7);
+    private static final Map<String, Boolean> unacknowledgedWin = Collections.synchronizedMap(new HashMap<>());
+    private static int decks = 10;
+    static CardStack stack = new CardStack(decks);
 
     private static void fatal(String input) {
         System.err.println(input);
@@ -131,7 +136,37 @@ public class Croupier {
                             System.out.println("Spieler " + name + " registriert");
                         }
                     }
-                } else if (state != State.REGISTER) {
+                } else if (parts[0].equals("bet")) {
+                    Player pl = players.get(parts[1]);
+                    int bet = Integer.parseInt(parts[2]);
+                    if (pl == null) {
+                        System.out.println("Nachricht von unbekanntem Client erhalten.");
+                    } else if (state != State.REGISTER && state != State.WAIT && state != State.BET) {
+                        sendMessage(pl, "bet declined momentan nicht moeglich");
+                    } else if (bet < minBet || bet > maxBet) {
+                        sendMessage(pl, "bet declined Wette nicht zwischen " + minBet + " und " + maxBet);
+                    } else {
+                        pl.setBet(bet);
+                        sendMessage(pl, "bet accepted");
+                    }
+                } else if (line.startsWith("numberOfDecks")) {
+                    Counter c = counters.get(parts[1]);
+                    if (c != null) {
+                        sendMessage(c, "numberOfDecks " + decks);
+                    }
+                } else if (line.startsWith("counter")) {
+                    Map<String, Client> map = unacknowledged.get(parts[3] + " " + " " + parts[4] + " "+ " " + parts[5]);
+                    if (map != null) {
+                        map.remove("counter " + parts [1]);
+                    }
+                } else if (line.startsWith("player")) {
+                    Map<String, Client> map = unacknowledged.get(parts[3] + " " + " " + parts[4] + " " + " " + parts[5]);
+                    if (map != null) {
+                        map.remove("player " + parts[1]);
+                    }
+                } else if (line.startsWith("prize accepted")) {
+                    unacknowledgedWin.put(parts[1], true);
+                } else if (state == State.PLAYING) {
                     Player pl = players.get(parts[1]);
                     if (pl == null) {
                         System.out.println("Nachricht von unbekanntem Client erhalten.");
@@ -147,7 +182,7 @@ public class Croupier {
                         pl.action(Player.Action.SPLIT, parts[3] + " " + parts[4], Integer.parseInt(parts[2]));
                     }
                 }
-                //System.out.println(line);
+                System.out.println("received: " + line);
             } while (!line.equalsIgnoreCase("quit"));
         } catch (IOException e) {
             System.err.println("Unable to receive message on ownPort \"" + ownPort + "\".");
@@ -166,17 +201,53 @@ public class Croupier {
         }
     }
 
-    public static void sendCard(Card card) {
+    public static void sendMessage(Client client, String message) {
+        sendMessage(client.getIp(), client.getPort(), message);
+    }
+
+    public static void sendWin(Player p) {
         try {
-            String serializedCard = card.toJSON();
-            for (Player p : players.values()) {
-                sendMessage(p.getIp(), p.getPort(), serializedCard);
+            unacknowledgedWin.put(p.getName(), false);
+            int counter = 0;
+            while (counter < 5 && !unacknowledgedWin.get(p.getName())) {
+                p.giveWin(myValue);
+                TimeUnit.SECONDS.sleep(2);
+                counter++;
             }
             //TODO remove clients
-
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public static void sendCard(Card card) {
+        try {
+            String serializedCard = card.toJSON();
+            Map<String, Client> receivers = getClientsMap();
+            unacknowledged.put(card.getDeck() + " " + card.toString(), receivers);
+            int counter = 0;
+            while (counter < 5 && !receivers.isEmpty()) {
+                for (Client c : receivers.values()) {
+                    sendMessage(c, serializedCard);
+                }
+                TimeUnit.SECONDS.sleep(2);
+                counter++;
+            }
+            //TODO remove clients
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static Map<String, Client> getClientsMap() {
+        Map<String, Client> clients = Collections.synchronizedMap(new HashMap<>());
+        for (Player p : players.values()) {
+            clients.put("player " + p.getName(), p);
+        }
+        for (Counter c : counters.values()) {
+            clients.put("counter " + c.getName(), c);
+        }
+        return clients;
     }
 
     public static void checkTerminated() {

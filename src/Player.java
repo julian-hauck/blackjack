@@ -137,7 +137,6 @@ public class Player implements Client {
             }
         }
         Croupier.sendMessage(ip, port, "prize " + win);
-        //ToDo repeatition
     }
 
     public void action(Action action, String card, int deck) {
@@ -199,9 +198,8 @@ public class Player implements Client {
 
     }
 
-    public void bet(int bet) {
+    public void setBet(int bet) {
         this.bet = bet;
-        Croupier.sendMessage(ip, port, "bet accepted");
     }
 
     public int getPort() {
