@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit;
 public class Croupier {
 
     private static int port;
-    private static String name;
     private static int maxPlayers = 6;
     private enum ClientType {PLAYER, COUNTER};
     private enum State {REGISTER, BET, CARDS, PRIZE, WAIT}
@@ -50,17 +49,17 @@ public class Croupier {
     public static void main(String[] args) {
 
         // Handling arguments, checking validity
-        if (args.length != 2) {
-            fatal("Arguments: \"<port number> <client name>\"");
+        if (args.length != 1) {
+            fatal("Arguments: \"<port number>\"");
         }
         if (!isPort(args[0])) {
             fatal("Invalid port number");
         } else {
             port = Integer.parseInt(args[0]);
         }
-        name = args[1];
 
-        System.out.println(name + " (Port: " + port + ") is here, looking around.\nUse \"register <ip address> <port number>\" to contact another client.\nUse \"send <registered client name> <message>\" to message them.\nUse \"quit\" to exit program.");
+        System.out.println("Croupier (Port: " + port + ") is here, waiting for registrations.");
+        System.out.println("When all players and card counters are registered, press <Enter> to start the game.");
         // Start a new thread to listen for messages
         new Thread(() -> receiveLines(port)).start();
 
